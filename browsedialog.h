@@ -8,6 +8,8 @@
 //class BrowseDialog;
 //}
 
+
+class QSerialPort;
 class BrowseDialog : public QDialog ,public Ui::BrowseDialog
 {
     Q_OBJECT
@@ -15,6 +17,9 @@ class BrowseDialog : public QDialog ,public Ui::BrowseDialog
 public:
     explicit BrowseDialog(QWidget *parent = 0);
     ~BrowseDialog();
+
+    //char *binData;
+    QByteArray binByteArray ;
 
     struct Settings {
         QString name;
@@ -26,16 +31,33 @@ public:
         QString stringParity;
         QSerialPort::StopBits stopBits;
         QString stringStopBits;
+        QSerialPort::FlowControl flowControl;
+        QString stringFlowControl;
     };
+
+    Settings settings() const;
+
 private slots:
     void browseFile();    //the browseButton
-    //  void quit                //the canselButton
+ //void quit();                //the canselButton
     void openFile();  // the okButton
+    void refreshSerialPorts();
+    void clearBufferCache();
+    void readSerialData();
+    void writeSerialData();
+    void toggleSerialPort();
+
+
+   // keyPressEvent(QKeyEvent *e);
 
 private:
     void fillPortsParameters();
+    void fillPortsNames();
+    void startSerialPort();
+    void closeSerialPort();
 private:
-    Settings currentSettins;
+    Settings p;
+    QSerialPort *serial;
 };
 
 #endif // BROWSEDIALOG_H
