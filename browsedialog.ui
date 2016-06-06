@@ -228,9 +228,9 @@
           </spacer>
          </item>
          <item>
-          <widget class="QPushButton" name="startpushButton">
+          <widget class="QPushButton" name="uploadpushButton">
            <property name="text">
-            <string>Open COM</string>
+            <string>Upload</string>
            </property>
           </widget>
          </item>
@@ -288,7 +288,7 @@
   <tabstop>parityBox</tabstop>
   <tabstop>clearpushButton</tabstop>
   <tabstop>radioButton</tabstop>
-  <tabstop>startpushButton</tabstop>
+  <tabstop>uploadpushButton</tabstop>
   <tabstop>cancelpushButton</tabstop>
   <tabstop>okpushButton</tabstop>
   <tabstop>plainTextEdit</tabstop>

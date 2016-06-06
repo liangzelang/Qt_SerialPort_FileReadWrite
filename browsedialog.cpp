@@ -13,6 +13,7 @@
 #include <QtSerialPort/QSerialPortInfo>
 #include <QMessageBox>
 #include <QRadioButton>
+//#include <QTestEventList>
 
 BrowseDialog::BrowseDialog(QWidget *parent) :
     QDialog(parent)
@@ -23,10 +24,12 @@ BrowseDialog::BrowseDialog(QWidget *parent) :
     connect(browsepushButton,SIGNAL(clicked(bool)),this,SLOT(browseFile()));
     connect(cancelpushButton,SIGNAL(clicked(bool)),this,SLOT(reject()));
    // connect(okpushButton,SIGNAL(clicked(bool)),this,SLOT(accept()));
+    connect(uploadpushButton,SIGNAL(clicked(bool)),this,SLOT(uploadBinFile()));
     connect(okpushButton,SIGNAL(clicked(bool)),this,SLOT(writeSerialData()));
     connect(refreshpushButton,SIGNAL(clicked(bool)),this,SLOT(refreshSerialPorts()));
     connect(clearpushButton,SIGNAL(clicked()),this,SLOT(clearBufferCache()));
     connect(serial,SIGNAL(readyRead()),this,SLOT(readSerialData()));
+    connect(this,SIGNAL(gotSerialData()),this,SLOT(uploadBinFile()));
   //  connect(plainTextEdit, SIGNAL(getData(QByteArray)), this, SLOT(writeSerialData(QByteArray)));
     fillPortsParameters();
     fillPortsNames();
@@ -55,14 +58,21 @@ void BrowseDialog::browseFile()
        if(!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
            qDebug()<<"Can't open the file!"<<endl;
        }
+     //  QDataStream in(&file);
+    //   datalen = in.readRawData(dataBuf,10);
+    //   serial->write(dataBuf,10);
        while(!file.atEnd())
        {
             binByteArray = file.readAll();
-           //binData = str.toHex();
-          // binData = str.toHex().data();
-         plainTextEdit->insertPlainText(binByteArray.toHex());
+            dataBuf = binByteArray.data();
+            dataLen = file.size();
+           // dataLenTemp = dataLen;
+            plainTextEdit->insertPlainText(QString("%1").arg((dataLen)));
+            plainTextEdit->appendPlainText("\n");
+            plainTextEdit->insertPlainText(binByteArray.toHex());
        }
-    }
+       file.close();
+     }
 
 }
 
@@ -157,16 +167,28 @@ void BrowseDialog::startSerialPort()
     else
     {
         QMessageBox::critical(this, tr("Error"), serial->errorString());
-
     }
     okpushButton->setEnabled(true);
  }
 
 void BrowseDialog::readSerialData()
 {
-    QByteArray data = serial->readAll();
-   // console->putData(data); insertPlainText(QString(data));
-    plainTextEdit->insertPlainText(QString(data));
+    //quint16 serialReceiveDataLength = serial->readBufferSize();
+    //plainTextEdit->insertPlainText(QString("%2").arg(serialReceiveDataLength));
+    QByteArray serialReceiveData = serial->readAll();
+
+    char* serialBuf = serialReceiveData.data();
+    plainTextEdit->insertPlainText(QString(serialReceiveData));
+    echoFlag=0;
+    if((serialBuf[0]==0x12)&&(serialBuf[1]==0x10))
+    {
+        echoFlag=1;
+        emit gotSerialData();
+        QMessageBox::critical(this, tr("Error"), tr("Got the Echo !!!"));
+    }
+    else
+        echoFlag=0;
+    //plainTextEdit->insertPlainText(QString("%1").arg(serialBuf[0]));
 }
 
 void BrowseDialog::closeSerialPort()
@@ -197,6 +219,7 @@ void BrowseDialog::writeSerialData( )
     progressBar->setRange(0,100);
     int length=0;
     length = sizeof(binByteArray)>>10;
+    plainTextEdit->insertPlainText(QString(length));
 
     serial->write(binByteArray);
     //serial->write(InsyncData,sizeof(InsyncData));
@@ -204,3 +227,87 @@ void BrowseDialog::writeSerialData( )
     plainTextEdit->insertPlainText(tr("\n send OK \n"));
 }
 
+void BrowseDialog::uploadBinFile()
+{
+    char insyncData[]={0x21,0x20};
+    char eraseData[]={0x23,0x20};
+    //char multiProgData[]={0x27,0x20};
+   // char echoData[]={0x12,0x10};
+    //char rebootData[]={0x30,0x20};
+    if(serial->isOpen())
+    {
+
+        switch(progressNumber)
+        {
+        case 2:
+            serial->write(insyncData,sizeof(insyncData));
+            progressNumber++;
+            break;
+        case 1:
+            serial->write(eraseData,sizeof(eraseData));
+            progressNumber++;
+            //QMessageBox::critical(this, tr("erase "), tr("why me !!!"));
+            break;
+        case 0:
+        {
+
+            if(((dataLenTemp+1)<=dataLen)&&((dataLen-dataLenTemp-1)>=writeLength))
+            {
+                serial->write(0x27);
+                serial->write( writeLength);
+                for(i=dataLenTemp;i<dataLenTemp+writeLength;i++)
+                {
+                    serial->write(dataBuf[dataLenTemp]);
+                }
+                serial->write("0x20");
+
+                if((dataLenTemp+1)==dataLen)
+                {
+                    progressNumber++;   //never enter this loop
+                }
+                 dataLenTemp=dataLenTemp+writeLength;
+            }
+            else if(((dataLenTemp+1)<dataLen)&&((dataLen-dataLenTemp-1)<=writeLength))
+            {
+                serial->write(0x27);
+                serial->write(dataLen-dataLenTemp-1);
+                for(i=dataLenTemp;i<dataLen;i++)
+                {
+
+                }
+                serial->write(0x20);
+               // dataLenTemp=dataLen;
+                  progressNumber++;   //never enter this loop
+            }
+
+            //QDataStream in(&binByteArray ,QIODevice::ReadOnly);
+            //datalen = in.readRawData(dataBuf,10);    //file pointer is  out of this file
+
+             //serial->write(binByteArray);   //dataBuf    dataLen  dataLenTemp
+
+            //char *binkeii = binByteArray.data();
+            break;
+        }
+            //datalen = in.readRawData(dataBuf,10);    //file pointer is  out of this file
+          //  serial->write(dataBuf,252);
+
+          //  serial->write(multiProgData,sizeof(multiProgData));
+           // serial->write(dataBuf,10);
+        default:
+            break;
+        }
+    }
+    else
+    {
+       // startSerialPort();
+       // QMessageBo
+        plainTextEdit->insertPlainText(tr("Please open serial port before Upload!!!"));
+        QMessageBox::critical(this, tr("Error"), tr("Please open serial port before Upload!!!"));
+    }
+
+}
+
+void BrowseDialog::waitForEcho()
+{
+
+}

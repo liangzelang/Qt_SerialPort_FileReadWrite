@@ -3,9 +3,10 @@
 # Project created by QtCreator 2016-06-03T09:37:39
 #
 #-------------------------------------------------
-
-QT       += core gui
+QT += core
+QT += core gui
 QT += serialport
+#QT += testlib
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 

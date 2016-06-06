@@ -20,6 +20,13 @@ public:
 
     //char *binData;
     QByteArray binByteArray ;
+    char* dataBuf;
+    char echoFlag;
+    char progressNumber=0;
+    char writeLength=252;          //this number must be the multiple of 4
+    int    dataLen;
+    int    dataLenTemp=0;
+
 
     struct Settings {
         QString name;
@@ -37,6 +44,9 @@ public:
 
     Settings settings() const;
 
+ signals:
+    void gotSerialData();
+
 private slots:
     void browseFile();    //the browseButton
  //void quit();                //the canselButton
@@ -46,11 +56,13 @@ private slots:
     void readSerialData();
     void writeSerialData();
     void toggleSerialPort();
+    void uploadBinFile();
 
 
    // keyPressEvent(QKeyEvent *e);
 
 private:
+    void waitForEcho();
     void fillPortsParameters();
     void fillPortsNames();
     void startSerialPort();
