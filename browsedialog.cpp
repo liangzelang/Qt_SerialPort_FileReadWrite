@@ -13,6 +13,8 @@
 #include <QtSerialPort/QSerialPortInfo>
 #include <QMessageBox>
 #include <QRadioButton>
+#include <QThread>
+#include <QProcess>
 //#include <QTestEventList>
 
 BrowseDialog::BrowseDialog(QWidget *parent) :
@@ -30,6 +32,7 @@ BrowseDialog::BrowseDialog(QWidget *parent) :
     connect(clearpushButton,SIGNAL(clicked()),this,SLOT(clearBufferCache()));
     connect(serial,SIGNAL(readyRead()),this,SLOT(readSerialData()));
     connect(this,SIGNAL(gotSerialData()),this,SLOT(uploadBinFile()));
+    connect(startpushButton,SIGNAL(clicked(bool)),this,SLOT(startApplication()));
   //  connect(plainTextEdit, SIGNAL(getData(QByteArray)), this, SLOT(writeSerialData(QByteArray)));
     fillPortsParameters();
     fillPortsNames();
@@ -63,14 +66,14 @@ void BrowseDialog::browseFile()
     //   serial->write(dataBuf,10);
        while(!file.atEnd())
        {
-            binByteArray = file.readAll();
-            dataBuf = binByteArray.data();
-            dataLen = file.size();
-           // dataLenTemp = dataLen;
-            plainTextEdit->insertPlainText(QString("%1").arg((dataLen)));
-            plainTextEdit->appendPlainText("\n");
-            plainTextEdit->insertPlainText(binByteArray.toHex());
+           //QByteArray buf = file.readLine(512);
+           binByteArray.append(file.readLine(512));
        }
+       dataLen = file.size();
+       plainTextEdit->insertPlainText(QString("%1").arg((dataLen)));
+       plainTextEdit->appendPlainText("\n");
+       //plainTextEdit->insertPlainText(binByteArray.toHex());
+        plainTextEdit->insertPlainText(binByteArray.toHex());
        file.close();
      }
 
@@ -183,8 +186,9 @@ void BrowseDialog::readSerialData()
     if((serialBuf[0]==0x12)&&(serialBuf[1]==0x10))
     {
         echoFlag=1;
+        plainTextEdit->insertPlainText("send data OK \n");
         emit gotSerialData();
-        QMessageBox::critical(this, tr("Error"), tr("Got the Echo !!!"));
+       // QMessageBox::critical(this, tr("Error"), tr("Got the Echo !!!"));
     }
     else
         echoFlag=0;
@@ -226,74 +230,85 @@ void BrowseDialog::writeSerialData( )
     //plainTextEdit->insertPlainText(binByteArray.toHex());
     plainTextEdit->insertPlainText(tr("\n send OK \n"));
 }
-
+void BrowseDialog::startApplication()
+{
+    char rebootData[2]={0x30,0x20};
+    serial->write(rebootData,sizeof(rebootData));
+}
 void BrowseDialog::uploadBinFile()
 {
-    char insyncData[]={0x21,0x20};
-    char eraseData[]={0x23,0x20};
-    //char multiProgData[]={0x27,0x20};
-   // char echoData[]={0x12,0x10};
-    //char rebootData[]={0x30,0x20};
+    char writedByte;
+    char  temp=0;
+    char localWriteDataLength=0;
+
+    char eocData[1]={0x20};
+    char insyncData[2]={0x21,0x20};
+    char eraseData[2]={0x23,0x20};
+    char multiProgData[2]={0x27,writeLength};
+
+    char Reboot_ID1[41]={0xfe,0x21,0x72,0xff,0x00,0x4c,0x00,0x00,0x80,0x3f,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xf6,0x00,0x01,0x00,0x00,0x48,0xf0};
+    char Reboot_ID0[41]={0xfe,0x21,0x45,0xff,0x00,0x4c,0x00,0x00,0x80,0x3f,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xf6,0x00,0x00,0x00,0x00,0xd7,0xac};
+
+
+
     if(serial->isOpen())
     {
 
         switch(progressNumber)
         {
-        case 2:
+        case 5:
+            serial->write(insyncData,sizeof(insyncData));
+            serial->write(Reboot_ID0,sizeof(Reboot_ID0));
+            serial->write(Reboot_ID1,sizeof(Reboot_ID1));
+            //sleep(1500);
+            QThread::msleep(1500);
+            serial->readAll();       //clear the receive buffer.
+             serial->write(insyncData,sizeof(insyncData));
+             progressNumber++;
+        case 0:
             serial->write(insyncData,sizeof(insyncData));
             progressNumber++;
             break;
+
         case 1:
             serial->write(eraseData,sizeof(eraseData));
             progressNumber++;
             //QMessageBox::critical(this, tr("erase "), tr("why me !!!"));
             break;
-        case 0:
-        {
 
-            if(((dataLenTemp+1)<=dataLen)&&((dataLen-dataLenTemp-1)>=writeLength))
+        case 2:
+            localWriteDataLength= writeLength;   //252
+            temp = writeDataTimes;          //0  1
+            multiProgData[0] = 0x27;
+            multiProgData[1] = writeLength;
+            if((dataLen>(writeDataTimes*writeLength))&&(dataLen<((writeDataTimes+1)*writeLength)))
             {
-                serial->write(0x27);
-                serial->write( writeLength);
-                for(i=dataLenTemp;i<dataLenTemp+writeLength;i++)
-                {
-                    serial->write(dataBuf[dataLenTemp]);
-                }
-                serial->write("0x20");
-
-                if((dataLenTemp+1)==dataLen)
-                {
-                    progressNumber++;   //never enter this loop
-                }
-                 dataLenTemp=dataLenTemp+writeLength;
+                //writeLength = dataLen-writeLength*writeDataTimes;
+                multiProgData[0] = 0x27;
+                multiProgData[1] = dataLen-writeLength*writeDataTimes ;
+                serial->write(multiProgData,sizeof(multiProgData));
+                writedByte=serial->write(&(binByteArray.data()[writeDataTimes*writeLength]),(dataLen-writeLength*writeDataTimes));
+                serial->write(eocData,sizeof(eocData));
+                QMessageBox::critical(this,tr("finish"),tr("finish transmission"));
+                progressNumber++;
+                writeDataTimes=0;
+                writeLength = 252;
+                break;
             }
-            else if(((dataLenTemp+1)<dataLen)&&((dataLen-dataLenTemp-1)<=writeLength))
+            serial->write(multiProgData,sizeof(multiProgData));
+            writedByte=serial->write(&(binByteArray.data()[writeDataTimes*writeLength]),writeLength);
+            serial->write(eocData,sizeof(eocData));
+            writeDataTimes++;
+            if(dataLen==(writeDataTimes*writeLength))
             {
-                serial->write(0x27);
-                serial->write(dataLen-dataLenTemp-1);
-                for(i=dataLenTemp;i<dataLen;i++)
-                {
-
-                }
-                serial->write(0x20);
-               // dataLenTemp=dataLen;
-                  progressNumber++;   //never enter this loop
+                   QMessageBox::critical(this, tr("erase "), tr("why me !!!"));
+                    progressNumber++;
+                    writeDataTimes=0;
+                    writeLength = 252;
             }
-
-            //QDataStream in(&binByteArray ,QIODevice::ReadOnly);
-            //datalen = in.readRawData(dataBuf,10);    //file pointer is  out of this file
-
-             //serial->write(binByteArray);   //dataBuf    dataLen  dataLenTemp
-
-            //char *binkeii = binByteArray.data();
-            break;
-        }
-            //datalen = in.readRawData(dataBuf,10);    //file pointer is  out of this file
-          //  serial->write(dataBuf,252);
-
-          //  serial->write(multiProgData,sizeof(multiProgData));
-           // serial->write(dataBuf,10);
-        default:
+           break;
+       default:
+           //uploadpushButton       disable the uploadpushButton
             break;
         }
     }

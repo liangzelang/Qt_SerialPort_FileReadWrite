@@ -19,12 +19,14 @@ public:
     ~BrowseDialog();
 
     //char *binData;
-    QByteArray binByteArray ;
-    char* dataBuf;
+    QByteArray binByteArray;
+    char *dataBuf;
     char echoFlag;
     char progressNumber=0;
-    char writeLength=252;          //this number must be the multiple of 4
-    int    dataLen;
+    qint64  writeLength=252;          //this number must be the multiple of 4
+    int    fileNumber=0;
+    int    writeDataTimes=0;
+    int    dataLen=0;
     int    dataLenTemp=0;
 
 
@@ -57,6 +59,7 @@ private slots:
     void writeSerialData();
     void toggleSerialPort();
     void uploadBinFile();
+    void startApplication();
 
 
    // keyPressEvent(QKeyEvent *e);
